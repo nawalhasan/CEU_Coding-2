@@ -1,0 +1,129 @@
+---
+title: "Web Scraping Assignment 2"
+author: "Nawal Zehra Hasan"
+date: "12/05/2021"
+output: html_document
+---
+
+
+Prompt: Find an api that returns with a JSON. You have to prove that you know how to deal with a list. 
+Write a function(s) that process one batch of data and then move to the next data. (lapply, rbindlist). Show your data in table format(head is enough) and make a few(2-3) ggplot which will give some insight of your dataset.   
+
+
+```{r, echo=TRUE, message=FALSE}
+#cleaning the environment
+rm(list = ls())
+```
+
+
+```{r, echo=TRUE, message=FALSE}
+#loading relevant libraries
+library(jsonlite)
+library(httr)
+library(rvest)
+library(data.table)
+library(ggplot2)
+library(tidyverse)
+library(forcats)
+```
+ABOUT THE API
+
+To complete this task, I chose the offical US Government's source for fuel economy API information to scrape data. The API information can be found [*here*](https://www.fueleconomy.gov/feg/ws/). This was my choice as it gave a variety of options to choose from about vehicles such as vehicle make, fuel prices, emissions, model years and much more. I chose emissions for a few vehicle IDs(provided in the csv on the website) which returned a data frame with the variables listed below. This API was publicly available and anyone can access it without any sort of registration or private key/token. 
+
+Below is the meaning for each variable for Emissions dataframe that I will create using the API
+* EmissionsInfo
+* efid: engine family ID
+* id: vehicle record ID (links emission data to the vehicle record)
+* salesArea: EPA sales area code
+* score: EPA 1-10 smog rating for fuelType1
+* scoreAlt: EPA 1-10 smog rating for fuelType2
+* smartwayScore: SmartWay Code
+* standard: Vehicle Emission Standard Code
+* stdText: Vehicle Emission Standard
+
+```{r, echo=TRUE, results='hide'}
+#emission records for specific vehicle
+#using base url
+base_url <- 'https://www.fueleconomy.gov/ws/rest/'
+#creating info url
+info_url <- 'vehicle/emissions/'
+#adding ID
+id <- '40593'
+full_url <- base::paste0(base_url, info_url, id)
+#call the API
+api_call <- GET(full_url)  
+api_call$status_code
+Emissions_list <- fromJSON(rawToChar(api_call$content), flatten = TRUE)
+df <- Emissions_list$emissionsInfo
+df
+```
+
+
+```{r, echo=TRUE, results='hide'}
+#emission records for 4 vehicles
+base_url <- 'https://www.fueleconomy.gov/ws/rest/'
+info_url <- 'vehicle/emissions/'
+ids <- c('41118','41090', '40638','19935')
+full_url <- paste0(base_url, info_url, ids)
+```
+
+
+
+```{r, echo=TRUE, results='hide'}
+#function to get multiple vehicles emissions
+Call_api <- function(api){
+  api_call <- GET(api)
+  api_call$status_code
+  Emissions_list <- fromJSON(rawToChar(api_call$content), flatten = TRUE)
+  df <- Emissions_list$emissionsInfo
+}
+```
+
+
+```{r}
+#using lapply and rbind 
+df_list <-lapply(full_url,Call_api)
+final_df <- rbindlist(df_list) 
+final_df  
+head(final_df)
+```
+
+
+```{r, fig.align="center"}
+#Visualizations
+
+#no. of vehicles with given IDs
+v1 <- ggplot(final_df, aes(x= fct_infreq(id), fill = id)) +
+  geom_bar() +
+  xlab('Vehicle Id') +
+  ylab('No. of vehicles') + 
+  ggtitle('Number of Vehicles with Given IDs') +
+  scale_fill_manual(values = c("19935" = "steelblue", 
+                               "41090" =  "skyblue", 
+                               "41118" = "lightblue", 
+                               "40638" = "slategray2"))+
+   theme(plot.title = element_text(face = "bold", hjust = 0.5))
+v1
+```
+
+
+```{r, fig.align="center"}
+#Emissions Score by Sales Area
+v2 <- ggplot(final_df) +
+  aes(x = score, fill = salesArea, colour = salesArea) +
+  geom_bar() +
+  scale_fill_manual(
+    values = c(`3` = "#29749E",
+               `7` = "#122243")) +
+  scale_color_manual(
+    values = c(`3` = "#29749E",
+               `7` = "#122243")) +
+    xlab("Score") +
+    ylab("Sales Area")  +
+    ggtitle("Score by Sales Area") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+v2 
+```
+
+
