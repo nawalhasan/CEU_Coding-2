@@ -1,0 +1,238 @@
+---
+title: "Coding 2:Web Scraping - Final Project"
+author: "Nawal Zehra Hasan"
+date: "12/18/2021"
+output: html_document
+---
+
+In the real world as an analyst I am given a task to understand why people have lost the habit of reading books. What could the reasons behind it be? Have they been replaced by social media? Do people not have time to read? Or are the prices for the books a reason for them to stop purchasing books and perhaps look for alternatives which are cheaper and easily accessible. I came across a website which has books from different genres with a total of 50 pages and 20 books on each page. My main variable of interest is price and hence my visualizations will be analysing price through different lenses. I chose to scrape [*this*](https://books.toscrape.com/index.html) website for my final project.
+
+To understand and apply what was learnt in class I divided my project into 4 parts; 1)one book, 2)one page, 3)50 pages and 4)visualizations.
+
+```{r, echo=TRUE, message=FALSE}
+rm(list = ls())
+library(rvest)
+library(purrr)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(xml2)
+```
+
+
+```{r, message=FALSE,echo=FALSE}
+#write the html file to check details in editor
+x_url <- read_html("https://books.toscrape.com/catalogue/category/books/nonfiction_13/page-1.html")
+write_html(x_url, 'x.html')
+```
+
+1)I created a function to get one book details and form a single line data set. I chose one job and a few variables related to the book to complete the first part of the project. We get a single line data frame with the title, price, url and availabaility of the book. Now we know we are in the right direction and are prepared to scrape the first page with 20 books.
+```{r}
+#book url
+t_url <- ("https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html")
+
+#create a function
+get_one_book <- function(t_url){
+  
+  url <- t_url
+  
+  t <- read_html(t_url)
+  #title of one book
+  title <- 
+    t %>% 
+    html_node("h1") %>% 
+    html_text()
+  
+  #price of the book
+  price <- 
+    t %>% 
+    html_node(".price_color") %>% 
+    html_text()
+  
+  #availability of book
+  availability <- 
+    t %>% 
+    html_node("tr:nth-child(6) td") %>% 
+    html_text()
+
+ #clean the data 
+ availability <-  gsub("\n", "", availability)
+  
+  #combining to form a data set  
+  df1 <- data.frame(url, title, price, availability, stringsAsFactors = TRUE)
+  return(df1)
+}
+
+```
+
+```{r, echo=TRUE, results='hide'}
+#checking the function
+get_one_book("https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html")
+```
+2) Here, I scraped the first page of the book and used relative links to get the link for each book in case we are interested in digging deeper with our analysis and need specific information about each book on the page. Again, functions were used and then I combined it to form a data frame.
+```{r}
+#first page of the html
+url <- "http://books.toscrape.com/catalogue/page-1.html"
+get_one_page <- function(url){
+  
+  t <- read_html(url)
+  
+  # title of the books  
+  title <- 
+    t %>% 
+    html_nodes("h3") %>% 
+    html_text()
+  
+  # price of the books
+  price <- 
+    t %>% 
+    html_nodes(".price_color") %>% 
+    html_text()
+  
+  #availability of the books 
+  availability <- 
+    t %>% 
+    html_nodes(".availability") %>% 
+    html_text()
+  
+  #clean the data 
+  availability <-  gsub("\n", "", availability)
+  
+  #relative links for each book on the page  
+  rel_links <- 
+    t %>% 
+    html_nodes("article > h3 > a") %>%
+    html_attr("href") 
+  links <- paste0("https://books.toscrape.com/", rel_links)
+  
+  #combining to form a data set
+  df2 <- data.frame(title, price, availability, links, stringsAsFactors = TRUE) 
+  return(df2)
+
+}
+```
+
+
+```{r, echo=TRUE, results='hide'}
+#checking function
+ get_one_page("http://books.toscrape.com/catalogue/page-1.html")
+
+df <- get_one_page("http://books.toscrape.com/catalogue/page-1.html")
+```
+
+3) Using two extremely important functions learnt in class (lapply and rbind), I extracted information for the 50 pages on the website which includes all the books available there. This is the most useful function as it saves time and does everything automatically. We can see what our data frame looks like with the head function. Now we are set for our visualizations.
+```{r, echo=TRUE, message=FALSE}
+#one page for the books
+df <- get_one_page("http://books.toscrape.com/catalogue/page-1.html")
+
+#using paste to get the links of the 3 pages with more pages
+links <- paste0("http://books.toscrape.com/catalogue/page-", 1:50, ".html")
+
+#using lapply to get a list of data frames which equals 3 in our case
+list_of_dfs <- lapply(links, get_one_page)
+
+#using rbind to combine 3 data frames by rows/observations and name is as final_df
+books_df <- rbindlist(list_of_dfs, fill = T)
+
+```
+
+```{r}
+#showing the first part of the final data frame
+head(books_df)
+```
+
+4a) Before we delve into visualizing our data, we need to transform some variables and clean them to be able to use them properly. I separated the pound sign from price and then converted it to a numeric variable as it was a factor variable. Then I checked the summary statistics for our main variable; price. We can see that the average price for a book is 35£ and the minimum price of a book is 10£ and the maximum is 60£.We plot these prices on a density plot. So we can claim that there is quite a bit of variation in book pricing on this website. These could be because of the genres or maybe the size of the book. Perhaps children's books are cheaper than adults. 
+
+```{r, echo=TRUE, message=FALSE}
+#separate pound unit from price
+books_df <- separate( books_df , price , "£" ,
+                into = c("garbage", "price") )
+
+#remove garbage column
+books_df <- select( books_df , -garbage )
+
+#convert prices from factor to numeric 
+books_df$price <- as.numeric(as.character( books_df$price ) )
+
+#check data type
+class( books_df$price )
+
+#price summary table
+pr_books <- summary(books_df$price2)
+```
+
+
+```{r, echo=TRUE, message=FALSE}
+#checking pattern of mean price for books
+v <- books_df %>% select(price)
+
+summary(v)
+
+ggplot(data = books_df, mapping = aes(x=price)) + 
+  geom_histogram(aes(y=..density..),fill="steelblue",color="white",alpha=0.7) + 
+  geom_density() +
+  geom_rug() +
+  labs(x='mean price for books') +
+  theme_minimal()
+```
+
+4b) Next, I did a bit of data work. I created a new variable with mutate and named it price2. This rounded off the prices to zero decimal places. We used this to created another binary variable where books priced above average price are coded as 1 and those under the average price are 0. Then we calculated the mean prices for both 0 and 1 categories and created a factor variable which says 'cheap' for 0 and 'expensive' for 1. Now I got the average price for both the categories and we can see thay average price for cheap is 22£ and the average price for expensive books is 47£.
+```{r,echo=TRUE, message=FALSE }
+#add new column with rounded prices & binary for price > 35
+books_df <- books_df %>% mutate( price2 = round(books_df$price, 0) ) %>% 
+                         mutate( price3 = as.numeric( price2 >= 35 ) )
+
+# Add the mean of the prices for both categories
+price3 <- books_df %>% group_by(price3) %>% 
+            dplyr:: summarize(Eprice_cat2=mean(price))
+
+#join to create df
+books_df <-left_join(books_df,price3)
+
+#Recode it to a factor
+books_df <- books_df %>%  mutate(price3 = 
+                               recode(price3,`0` = "Cheap",`1` = "Expensive"))
+
+```
+```{r, echo=TRUE, message=FALSE}
+#cheap and expensive books categorized by mean price 
+# Plot the two categories
+ggplot(data = books_df) +
+  geom_point(aes(x = price3, y = Eprice_cat2), 
+             size = 5, shape = 21, alpha = 0.4, fill = 'blue', na.rm=T) +
+  geom_text(aes(x = price3, y = Eprice_cat2, label = round(Eprice_cat2)), 
+            hjust = -0.8, vjust = 0, color = "black", size = 3) +
+  scale_y_continuous(expand=c(0.01,0.01),limits = c(0, 400), breaks = seq(0,400, by=50)) +
+  expand_limits( y = 0.01) +
+  scale_x_discrete() +
+  labs(x = "Books (categories)", y = "Average price (£)") 
+```
+
+4c) In the last part, I created bins to categorize prices. As we saw above that price for books range between 10£ and 60£. So I created the bins accordingly with a 20£ range. Then I assigned each tage to a price range. Next I check the summary statistics for each category and plotted them with tags on x and log price on y. We can see by the box and violin plot that most books are priced between 40-60£(403) and few books are priced between 0-20£(196), so we can say that at least on this website as most books are extremely expensive and few books are inexpensive, prices could be a major reason that people are reading less books.
+```{r, echo=TRUE, message=FALSE}
+#create tags
+tags <- c("[0-20)","[20-40)", "[40-60)") 
+
+#assign tags to price range
+v <- books_df %>% select(price) 
+vgroup <- as_tibble(v) %>% 
+  mutate(tag = case_when(
+    price < 20 ~ tags[1],
+    price >= 20 & price < 40 ~ tags[2],
+    price >= 40 & price < 60 ~ tags[3])) 
+
+
+vgroup$tag <- factor(vgroup$tag,
+                       levels = tags,
+                       ordered = FALSE)
+summary(vgroup$tag)
+
+
+ggplot(data = vgroup, mapping = aes(x=tag,y=log10(price))) + 
+  geom_jitter(aes(color='blue'),alpha=0.2) +
+  geom_boxplot(fill="steelblue",color="black",alpha=0.3) + 
+  labs(x='mean price per group') +
+  guides(color=FALSE) +
+  theme_minimal() 
+```
+
